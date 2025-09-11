@@ -4,7 +4,6 @@ from dash import Dash, dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
 from dash import dash_table
 import plotly.express as px
-from dash.dependencies import MATCH
 
 # === Load all sheets dynamically ===
 file_path = "CRM_Analysis_Report.xlsx"
@@ -21,7 +20,7 @@ COLORS = {
     'primary': '#1F77B4',
     'secondary': '#6C757D',
     'accent': '#FF7F0E',
-    'background': '#F8F9FA',
+    'background': '#d8d4d8',  # Updated background color
     'table_header_bg': '#1F77B4',
     'table_header_color': 'white'
 }
@@ -68,35 +67,39 @@ def layout_generic(sheet_name, prev_pathname=None):
     return dbc.Container([
         nav_buttons(),
         html.H2(format_sheet_name(sheet_name), className="text-primary"),
-        dbc.Button("Download CSV", id={'type': 'download-btn', 'sheet': sheet_name}, color='success', className='my-2'),
-        dcc.Download(id={'type': 'download-csv', 'sheet': sheet_name}),
+        dbc.Button("Download CSV", id=f"download_{sheet_name.lower()}", color='success', className='my-2'),
+        dcc.Download(id=f"download_{sheet_name.lower()}_csv"),
         table
     ], className="p-4")
 
-# === Home Page with Date Filter and KPIs (Updated Layout) ===
+# === Home Page with KPIs and Background Color ===
 def layout_home():
     # KPI Cards
     kpi_cards = []
     total_dockets = sheets['Daywise_Report']['docketCount'].sum() if 'Daywise_Report' in sheets else 0
     total_complaints = sheets['Complaint_Breakdown']['count'].sum() if 'Complaint_Breakdown' in sheets else 0
-    total_repeat = sheets['Repeat_Call_Report'].iloc[:, 1:].sum().sum() if 'Repeat_Call_Report' in sheets else 0
     total_wrong = len(sheets['Wrong_Complaints']) if 'Wrong_Complaints' in sheets else 0
+    invalid_recharge_tagging = len(sheets['Invalid_Recharge_Tagging']) if 'Invalid_Recharge_Tagging' in sheets else 0
+    reassigned_complaints = len(sheets['Reassigned_Complaints']) if 'Reassigned_Complaints' in sheets else 0
+    wrong_dockets = len(sheets['Wrong_Dockets']) if 'Wrong_Dockets' in sheets else 0
 
     kpis = [
         ("Total Dockets", total_dockets, COLORS['primary']),
         ("Total Complaints", total_complaints, COLORS['accent']),
-        ("Repeat Calls", total_repeat, COLORS['secondary']),
-        ("Wrong Complaints", total_wrong, COLORS['header'])
+        ("Wrong Complaints", total_wrong, COLORS['header']),
+        ("Invalid Recharge Tagging", invalid_recharge_tagging, COLORS['secondary']),
+        ("Reassigned Complaints", reassigned_complaints, COLORS['primary']),
+        ("Wrong Dockets", wrong_dockets, COLORS['accent'])
     ]
 
     for title, value, color in kpis:
         kpi_cards.append(
             dbc.Card([
                 dbc.CardBody([
-                    html.H6(title, className="text-muted"),
-                    html.H3(f"{value:,}", className="fw-bold", style={"color": color})
+                    html.H6(title, className="text-muted", style={"fontSize": "0.8rem"}),
+                    html.H4(f"{value:,}", className="fw-bold", style={"color": color, "fontSize": "1.4rem"})
                 ])
-            ], className="m-2", style={'width': '15rem', 'textAlign': 'center'})
+            ], className="m-2", style={'width': '8rem', 'textAlign': 'Side'})
         )
 
     # Date range picker
@@ -129,16 +132,12 @@ def layout_home():
 
     return dbc.Container([
         html.H1("CRM Analysis Dashboard", className="text-center text-primary my-4"),
-        # KPI Row
         dbc.Row([dbc.Col(card, width="auto") for card in kpi_cards], justify="center"),
         html.H3("Explore Reports", className="text-center text-secondary my-4"),
-        # Sheet navigation cards
         dbc.Row([dbc.Col(card, width="auto") for card in sheet_cards], justify="center"),
-        # Date Picker for analysis chart
         dbc.Row(dbc.Col(date_picker, width=6), justify="center"),
-        # Analysis chart
         dbc.Row(dbc.Col(chart_graph, width=12), className="my-4")
-    ])
+    ], className="p-4", style={"backgroundColor": COLORS["background"], "minHeight": "100vh"})
 
 # === Callback for Home Page Daywise Chart ===
 @app.callback(
@@ -196,15 +195,16 @@ def display_page(pathname):
 def go_back(n_clicks, prev_path):
     return prev_path if prev_path else "/"
 
-# === Single Pattern-Matching Download Callback ===
-@app.callback(
-    Output({'type': 'download-csv', 'sheet': MATCH}, 'data'),
-    Input({'type': 'download-btn', 'sheet': MATCH}, 'n_clicks'),
-    prevent_initial_call=True
-)
-def trigger_download(n_clicks, sheet):
-    df = sheets[sheet]
-    return dcc.send_data_frame(df.to_csv, f"{sheet}.csv", index=False)
+# === Auto download callbacks ===
+for sheet in sheets.keys():
+    @app.callback(
+        Output(f"download_{sheet.lower()}_csv", "data"),
+        Input(f"download_{sheet.lower()}", "n_clicks"),
+        prevent_initial_call=True
+    )
+    def download_csv(n_clicks, sheet=sheet):
+        df = sheets[sheet]
+        return dcc.send_data_frame(df.to_csv, f"{sheet}.csv", index=False)
 
 # === Run server ===
 if __name__ == '__main__':
