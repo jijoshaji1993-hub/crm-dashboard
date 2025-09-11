@@ -1,4 +1,4 @@
 dash
-plotly
 pandas
-openpyxl
+plotly
+dash-bootstrap-components

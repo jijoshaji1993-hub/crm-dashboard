@@ -4,6 +4,7 @@ from dash import Dash, dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
 from dash import dash_table
 import plotly.express as px
+from dash.dependencies import MATCH
 
 # === Load all sheets dynamically ===
 file_path = "CRM_Analysis_Report.xlsx"
@@ -67,8 +68,8 @@ def layout_generic(sheet_name, prev_pathname=None):
     return dbc.Container([
         nav_buttons(),
         html.H2(format_sheet_name(sheet_name), className="text-primary"),
-        dbc.Button("Download CSV", id=f"download_{sheet_name.lower()}", color='success', className='my-2'),
-        dcc.Download(id=f"download_{sheet_name.lower()}_csv"),
+        dbc.Button("Download CSV", id={'type': 'download-btn', 'sheet': sheet_name}, color='success', className='my-2'),
+        dcc.Download(id={'type': 'download-csv', 'sheet': sheet_name}),
         table
     ], className="p-4")
 
@@ -195,16 +196,15 @@ def display_page(pathname):
 def go_back(n_clicks, prev_path):
     return prev_path if prev_path else "/"
 
-# === Auto download callbacks ===
-for sheet in sheets.keys():
-    @app.callback(
-        Output(f"download_{sheet.lower()}_csv", "data"),
-        Input(f"download_{sheet.lower()}", "n_clicks"),
-        prevent_initial_call=True
-    )
-    def download_csv(n_clicks, sheet=sheet):
-        df = sheets[sheet]
-        return dcc.send_data_frame(df.to_csv, f"{sheet}.csv", index=False)
+# === Single Pattern-Matching Download Callback ===
+@app.callback(
+    Output({'type': 'download-csv', 'sheet': MATCH}, 'data'),
+    Input({'type': 'download-btn', 'sheet': MATCH}, 'n_clicks'),
+    prevent_initial_call=True
+)
+def trigger_download(n_clicks, sheet):
+    df = sheets[sheet]
+    return dcc.send_data_frame(df.to_csv, f"{sheet}.csv", index=False)
 
 # === Run server ===
 if __name__ == '__main__':
